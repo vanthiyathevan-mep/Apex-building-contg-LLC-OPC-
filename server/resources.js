@@ -271,13 +271,12 @@ const resources = {
         { name: 'amount', label: 'Amount', type: 'money', readonly: true },
       ],
     },
+    // Record states in which an operation is not allowed (enforced by api.js, also used by the UI).
+    locked: { update: { status: ['Received', 'Cancelled'] }, delete: { status: ['Received'] } },
     actions: [{ name: 'receive', label: 'Mark as Received', confirm: 'Receive all items? Stock items will be added to inventory.', when: { status: 'Approved' } }],
     hooks: {
       beforeSave: [
         (db, d, ctx) => {
-          if (ctx.existing && ['Received', 'Cancelled'].includes(ctx.existing.status)) {
-            throw new ValidationError(`A ${ctx.existing.status.toLowerCase()} purchase order cannot be edited`);
-          }
           if (d.status === 'Received') throw new ValidationError('Use "Mark as Received" to receive a purchase order');
           if (!ctx.children || ctx.children.length === 0) throw new ValidationError('Add at least one line item');
           let subtotal = 0;
@@ -289,9 +288,6 @@ const resources = {
         },
         autoNumber('po_no', 'purchase_orders', (d) => `PO-${yearOf(d.order_date)}-`, 4),
       ],
-      beforeDelete: [(db, row) => {
-        if (row.status === 'Received') throw new ValidationError('A received purchase order cannot be deleted');
-      }],
     },
     actionHandlers: {
       receive(db, row) {
@@ -563,7 +559,15 @@ for (const [key, r] of Object.entries(resources)) {
 const canRead = (r, user) => !r.read || r.read.includes(user.role);
 const canWrite = (r, user) => r.write.includes(user.role);
 
+/** Returns the locking field/value if `op` is not allowed for this record's current state, else null. */
+function lockedBy(r, op, row) {
+  const rules = r.locked && r.locked[op];
+  if (!rules || !row) return null;
+  for (const [field, values] of Object.entries(rules)) if (values.includes(row[field])) return { field, value: row[field] };
+  return null;
+}
+
 module.exports = {
-  resources, ValidationError, canRead, canWrite, round2,
+  resources, ValidationError, canRead, canWrite, lockedBy, round2,
   PROJECT_COST_SQL, PROJECT_TOTAL_COST_SQL, INVOICE_PAID_SQL, INVOICE_STATE_SQL,
 };

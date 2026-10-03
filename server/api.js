@@ -1,7 +1,7 @@
 'use strict';
 /** Generic, metadata-driven CRUD over the resources in resources.js. */
 const { tx } = require('./db');
-const { resources, ValidationError, canRead, canWrite } = require('./resources');
+const { resources, ValidationError, canRead, canWrite, lockedBy } = require('./resources');
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -184,6 +184,11 @@ function labelOf(db, r, id) {
   return row ? String(row.label) : null;
 }
 
+function assertUnlocked(r, op, row) {
+  const lock = lockedBy(r, op, row);
+  if (lock) throw new ValidationError(`A ${String(lock.value).toLowerCase()} ${r.singular.toLowerCase()} cannot be ${op === 'update' ? 'edited' : 'deleted'}`);
+}
+
 function runHooks(list_, ...args) { for (const h of list_ || []) h(...args); }
 
 function save(db, user, name, id, body) {
@@ -198,6 +203,7 @@ function save(db, user, name, id, body) {
     if (op === 'update') {
       existing = db.prepare(`SELECT * FROM ${r.table} WHERE id = ?`).get(Number(id));
       if (!existing) throw new HttpError(404, `${r.singular} not found`);
+      assertUnlocked(r, 'update', existing);
     }
     const data = buildRecord(db, r.fields, body, existing, settings);
     let children = null;
@@ -247,6 +253,7 @@ function remove(db, user, name, id) {
   return tx(db, () => {
     const row = db.prepare(`SELECT * FROM ${r.table} WHERE id = ?`).get(Number(id));
     if (!row) throw new HttpError(404, `${r.singular} not found`);
+    assertUnlocked(r, 'delete', row);
     const label = labelOf(db, r, row.id);
     runHooks(r.hooks.beforeDelete, db, row, { user });
     db.prepare(`DELETE FROM ${r.table} WHERE id = ?`).run(row.id);
@@ -277,7 +284,7 @@ function meta(user) {
       key, label: r.label, singular: r.singular, group: r.group, icon: r.icon,
       canWrite: canWrite(r, user), ops: r.ops, printable: !!r.printable, detailView: r.detailView || null,
       dateField: dateFieldOf(r)?.name || null,
-      fields: r.fields, children: r.children || null, actions: r.actions || [],
+      fields: r.fields, children: r.children || null, actions: r.actions || [], locked: r.locked || null,
       computed: Object.fromEntries(Object.entries(r.computed).map(([k, c]) => [k, { label: c.label, type: c.type, list: !!c.list }])),
     };
   }

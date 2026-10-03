@@ -150,6 +150,18 @@ test('purchase order → receive → issue to project flows into inventory and j
   assert.equal((await c.post(`/api/purchase_orders/${po.data.id}/actions/receive`)).status, 400);
   assert.equal((await c.put(`/api/purchase_orders/${po.data.id}`, { notes: 'x' })).status, 400);
   assert.equal((await c.del(`/api/purchase_orders/${po.data.id}`)).status, 400);
+  assert.deepEqual((await c.get('/api/meta')).data.resources.purchase_orders.locked,
+    { update: { status: ['Received', 'Cancelled'] }, delete: { status: ['Received'] } });
+
+  // Cancelled POs are locked for editing but can still be deleted.
+  const cancelled = await c.post('/api/purchase_orders', {
+    supplier_id: supplier.id, order_date: '2026-03-02', status: 'Cancelled', items: [{ description: 'Scaffold hire', quantity: 1, unit_price: 100 }],
+  });
+  assert.equal(cancelled.status, 201);
+  const edit = await c.put(`/api/purchase_orders/${cancelled.data.id}`, { notes: 'x' });
+  assert.equal(edit.status, 400);
+  assert.match(edit.data.error, /cancelled purchase order cannot be edited/);
+  assert.equal((await c.del(`/api/purchase_orders/${cancelled.data.id}`)).status, 200);
 
   let m = (await c.get(`/api/materials/${material.id}`)).data;
   assert.equal(m.stock_qty, 100);

@@ -120,6 +120,12 @@ function relatedFor(resKey) {
   return out;
 }
 
+/** Mirrors the server's `locked` rules so we don't offer operations it will reject. */
+function isLocked(res, op, row) {
+  const rules = res.locked && res.locked[op];
+  return !!rules && Object.entries(rules).some(([field, values]) => values.includes(row[field]));
+}
+
 function matchesWhen(when, row) {
   return !when || Object.entries(when).every(([k, v]) => row[k] === v);
 }
@@ -129,8 +135,8 @@ export async function renderRecord(view, resKey, id) {
   if (!res) return notFound(view);
   const row = await get(`/${resKey}/${id}`);
   const reload = () => renderRecord(view, resKey, id);
-  const canEdit = res.canWrite && res.ops.includes('update');
-  const canDelete = res.canWrite && res.ops.includes('delete');
+  const canEdit = res.canWrite && res.ops.includes('update') && !isLocked(res, 'update', row);
+  const canDelete = res.canWrite && res.ops.includes('delete') && !isLocked(res, 'delete', row);
 
   const actionBtns = (res.canWrite ? res.actions : []).filter((a) => matchesWhen(a.when, row)).map((a) =>
     h('button', { class: 'btn btn-primary', onclick: async () => {
