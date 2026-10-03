@@ -1,0 +1,17 @@
+{
+  "name": "apex-construction-erp",
+  "version": "1.0.0",
+  "description": "Construction ERP for Apex Building Contracting LLC OPC - projects, labor, procurement, inventory, equipment, billing and job costing.",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "seed:demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "license": "UNLICENSED"
+}
