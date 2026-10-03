@@ -74,7 +74,19 @@ function serveStatic(req, res, pathname) {
   fs.createReadStream(file).pipe(res);
 }
 
-function createApp({ dbFile, adminPassword, secureCookies = false } = {}) {
+/**
+ * Client IP for login throttling. Behind a reverse proxy (ERP_TRUST_PROXY=1) use the last
+ * X-Forwarded-For entry: it is the one appended by our proxy, so clients cannot spoof it.
+ */
+function clientIp(req, trustProxy) {
+  if (trustProxy) {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1];
+  }
+  return req.socket.remoteAddress;
+}
+
+function createApp({ dbFile, adminPassword, secureCookies = false, trustProxy = false } = {}) {
   const db = openDatabase(dbFile || path.join(__dirname, '..', 'data', 'erp.db'));
   const generatedPassword = auth.ensureAdmin(db, adminPassword);
   const cookieAttrs = `Path=/; HttpOnly; SameSite=Strict${secureCookies ? '; Secure' : ''}`;
@@ -88,7 +100,7 @@ function createApp({ dbFile, adminPassword, secureCookies = false } = {}) {
     if (segs[0] === 'login' && method === 'POST') {
       const body = await readBody(req);
       const username = String(body.username || '').trim();
-      const key = `${req.socket.remoteAddress}|${username.toLowerCase()}`;
+      const key = `${clientIp(req, trustProxy)}|${username.toLowerCase()}`;
       if (auth.loginThrottled(key)) return send(res, 429, { error: 'Too many failed attempts. Try again in 15 minutes.' });
       const u = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
       if (!u || !auth.verifyPassword(String(body.password || ''), u.password_hash)) {
@@ -214,6 +226,7 @@ if (require.main === module) {
     dbFile: process.env.ERP_DB_FILE,
     adminPassword: process.env.ERP_ADMIN_PASSWORD,
     secureCookies: process.env.ERP_SECURE_COOKIES === '1',
+    trustProxy: process.env.ERP_TRUST_PROXY === '1',
   });
   if (process.env.ERP_DEMO === '1' && db.prepare('SELECT COUNT(*) AS n FROM projects').get().n === 0) {
     require('../scripts/seed-demo').seedDemo(db);
@@ -230,6 +243,19 @@ if (require.main === module) {
       console.log('──────────────────────────────────────────────');
     }
   });
+
+  // Graceful shutdown (docker stop / platform redeploys): finish requests, then close the DB cleanly.
+  let stopping = false;
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.on(sig, () => {
+      if (stopping) return;
+      stopping = true;
+      console.log(`${sig} received, shutting down…`);
+      server.close(() => { db.close(); process.exit(0); });
+      server.closeIdleConnections();
+      setTimeout(() => { db.close(); process.exit(0); }, 10000).unref();
+    });
+  }
 }
 
 module.exports = { createApp };

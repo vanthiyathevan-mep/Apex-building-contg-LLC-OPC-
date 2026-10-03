@@ -19,7 +19,9 @@ ERP_DEMO=1 ERP_ADMIN_PASSWORD='choose-a-password' npm start
 # or, into an empty database:  npm run seed:demo
 ```
 
-Run the tests with `npm test`.
+Run the tests with `npm test`. Back up the database (safe while running) with `npm run backup`.
+
+**Hosting it for your team:** see [DEPLOY.md](DEPLOY.md). It covers one-click Render deployment and self-hosting with Docker and automatic HTTPS.
 
 ### Configuration (environment variables)
 
@@ -30,6 +32,7 @@ Run the tests with `npm test`.
 | `ERP_ADMIN_PASSWORD` | random | Password for the initial `admin` user (first start only) |
 | `ERP_SECURE_COOKIES` | off | Set to `1` when served over HTTPS |
 | `ERP_DEMO` | off | Set to `1` to load demo data into an empty database |
+| `ERP_TRUST_PROXY` | off | Set to `1` behind a reverse proxy, so login throttling uses the real client IP |
 
 ## Modules
 

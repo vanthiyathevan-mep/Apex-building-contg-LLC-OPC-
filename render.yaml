@@ -1,0 +1,21 @@
+# One-click deploy on Render (https://render.com): New + → Blueprint → pick this repo.
+# A persistent disk is required so the database survives restarts and redeploys.
+services:
+  - type: web
+    name: apex-erp
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: ERP_ADMIN_PASSWORD
+        sync: false            # Render asks you for this on first deploy
+      - key: ERP_SECURE_COOKIES
+        value: "1"
+      - key: ERP_TRUST_PROXY
+        value: "1"
+      - key: ERP_DB_FILE
+        value: /data/erp.db
+    disk:
+      name: erp-data
+      mountPath: /data
+      sizeGB: 1

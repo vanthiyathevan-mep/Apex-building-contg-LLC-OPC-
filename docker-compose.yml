@@ -1,0 +1,37 @@
+# Self-hosting on any Linux server (VPS) with automatic HTTPS.
+#   1. Point your domain's DNS A record at the server.
+#   2. Copy deploy/.env.example to .env and fill it in.
+#   3. docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      ERP_ADMIN_PASSWORD: ${ERP_ADMIN_PASSWORD:?Set ERP_ADMIN_PASSWORD in .env}
+      ERP_SECURE_COOKIES: "1"
+      ERP_TRUST_PROXY: "1"
+    volumes:
+      - erp-data:/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      ERP_DOMAIN: ${ERP_DOMAIN:?Set ERP_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  erp-data:
+  caddy-data:
+  caddy-config:
