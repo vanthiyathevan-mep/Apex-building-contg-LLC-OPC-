@@ -1,0 +1,6 @@
+# Caddy obtains and renews a free HTTPS certificate for ERP_DOMAIN automatically.
+{$ERP_DOMAIN} {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy app:3000
+}

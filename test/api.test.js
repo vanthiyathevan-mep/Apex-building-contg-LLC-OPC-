@@ -319,3 +319,22 @@ test('demo seed loads and every report runs', async () => {
     if (res.data.rows[0]) assert.equal((await a.get(`/api/${key}/${res.data.rows[0].id}`)).status, 200);
   }
 });
+
+test('behind a trusted proxy, login throttling keys on the proxy-appended client IP', async () => {
+  const proxied = createApp({ dbFile: ':memory:', adminPassword: 'proxy-pass-123', trustProxy: true });
+  await new Promise((r) => proxied.server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${proxied.server.address().port}/api/login`;
+  const login = (xff, password) => fetch(url, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': xff },
+    body: JSON.stringify({ username: 'admin', password }),
+  });
+  try {
+    for (let i = 0; i < 10; i++) await login(`10.0.0.${i}, 203.0.113.7`, 'wrong');
+    // A spoofed leading entry does not escape the lockout for the real client IP...
+    assert.equal((await login('198.51.100.1, 203.0.113.7', 'proxy-pass-123')).status, 429);
+    // ...while a different real client is unaffected.
+    assert.equal((await login('203.0.113.8', 'proxy-pass-123')).status, 200);
+  } finally {
+    await new Promise((r) => proxied.server.close(r));
+  }
+});
